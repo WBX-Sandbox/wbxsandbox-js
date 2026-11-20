@@ -84,12 +84,17 @@ expected. Continue with step 5.
 2. GitHub → repository → **Settings → Secrets and variables → Actions → New repository
    secret**: name **`NPM_BOOTSTRAP_TOKEN`**, value = the token.
 3. Release `v0.1.0` as described in [Every release](#every-release). npm falls back to the
-   token because no trusted publisher exists yet.
-4. Right after it is published: **delete the secret** in GitHub and **delete the token** on
+   token because no trusted publisher exists yet. npm accepts the first version of a new
+   package from a token only as a **staged** release, so the workflow runs
+   `npm stage publish` for it.
+4. npmjs.com → your avatar → **Staged Packages** → `wbxsandbox` → **Approve** (confirm with
+   2FA). Only then is the version public.
+5. Right after it is published: **delete the secret** in GitHub and **delete the token** on
    npmjs.com (Access Tokens → the token → Delete).
 
 Note: npm announced that 2FA-bypass tokens lose the right to publish directly (target:
-January 2027). If option B is refused, use option A.
+January 2027). Staging plus approval in the browser keeps working; if option B is refused,
+use option A.
 
 ### 5. Configure the trusted publisher (npmjs.com, in the browser)
 

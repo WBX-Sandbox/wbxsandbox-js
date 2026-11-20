@@ -26,8 +26,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # trusted publishing needs npm CLI 11.5.1 or newer; Node.js 22 ships npm 10
-      - run: npm install -g npm@^11.5.1
+      # trusted publishing needs npm CLI 11.5.1 or newer, `npm stage publish` npm 12;
+      # Node.js 22 ships npm 10
+      - run: npm install -g npm@^12
       - run: npm --version
 
       - name: Check that the tag matches package.json
@@ -52,12 +53,19 @@ jobs:
 
       - name: Publish to npm
         env:
-          # Empty after the first release. Only for the one-time bootstrap described in
-          # PUBLISHING.md (option B): npm uses OIDC when a trusted publisher is configured,
-          # otherwise this token. Delete the secret once trusted publishing is set up.
+          # Only for the one-time bootstrap described in PUBLISHING.md. npm uses OIDC when a
+          # trusted publisher is configured, otherwise this token. Delete the secret once
+          # trusted publishing is set up.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG=latest
           case "$VERSION" in *-*) TAG=next ;; esac
-          npm publish --provenance --access public --tag "$TAG"
+          if npm view wbxsandbox name >/dev/null 2>&1; then
+            npm publish --provenance --access public --tag "$TAG"
+          else
+            # npm accepts the first version of a new package only as a staged release; a
+            # maintainer approves it with 2FA at npmjs.com → Staged Packages.
+            npm stage publish --provenance --access public --tag "$TAG"
+            echo "::notice::wbxsandbox $VERSION is staged – approve it at https://www.npmjs.com → Staged Packages"
+          fi
