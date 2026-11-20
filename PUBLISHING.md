@@ -123,8 +123,14 @@ From now on no token exists anywhere.
 6. **Publish release.**
 
 The **Release** workflow then checks the tag against `package.json`, installs, builds, runs
-the tests, and publishes with provenance. When the run is green the version is on
-<https://www.npmjs.com/package/wbxsandbox> within a minute, with a "Provenance" badge.
+the tests and **stages** the version with provenance (`npm stage publish`).
+
+7. npmjs.com → avatar → **Staged Packages** → `wbxsandbox` → **Approve** (2FA). Only then is
+   the version on <https://www.npmjs.com/package/wbxsandbox>, with a "Provenance" badge.
+
+The trusted publisher allows only staged publishing ("Allow npm publish" is off), so even
+someone with write access to the GitHub repository cannot publish a version without the
+maintainer's 2FA approval.
 
 If the run fails before `npm publish`, nothing was published: fix it, delete the release and
 its tag, and create it again. A version number can never be published twice – after a
