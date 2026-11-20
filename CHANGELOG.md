@@ -4,6 +4,13 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
+## [0.1.3] – 2026-11-20
+
+### Documentation
+
+- README: overview of what the SDK covers (sandboxes, jobs, batches, metrics, desktop, receipts, webhooks,
+  budgets) with links to the documentation. No code changes.
+
 ## [0.1.2] – 2026-11-20
 
 ### Fixed
