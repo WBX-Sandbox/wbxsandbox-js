@@ -1,0 +1,56 @@
+{
+  "name": "wbxsandbox",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for WBX Sandbox – isolated cloud sandboxes (Firecracker microVMs) for AI agents: commands, files, background jobs, batches, metrics and desktop control",
+  "license": "MIT",
+  "author": "WBX Sandbox",
+  "homepage": "https://sandbox.wbx.cz/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WBX-Sandbox/wbxsandbox-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WBX-Sandbox/wbxsandbox-js/issues"
+  },
+  "keywords": [
+    "sandbox",
+    "microvm",
+    "firecracker",
+    "ai-agents",
+    "code-execution",
+    "computer-use",
+    "wbx"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.check.json",
+    "test": "npm run typecheck && node --test test/*.test.mjs",
+    "test:integration": "node --test test/integration/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "~5.9.3"
+  }
+}
