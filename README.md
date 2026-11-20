@@ -1,17 +1,46 @@
 # wbxsandbox – TypeScript SDK for WBX Sandbox
 
-Official TypeScript / JavaScript SDK for [WBX Sandbox](https://sandbox.wbx.cz): isolated cloud
-sandboxes for AI agents and code execution. Every sandbox is a Firecracker microVM with its own
-Linux kernel, disk and network rules.
+[![npm](https://img.shields.io/npm/v/wbxsandbox)](https://www.npmjs.com/package/wbxsandbox)
 
-- Sandboxes: commands (also streamed), code, files, background processes, public URLs, sleep and wake
-- Background jobs and batches: no open connection, logs, result files, signed execution receipts
-- Live metrics and desktop control (computer use) for agents
-- Typed errors, timeouts, `AbortSignal` everywhere, safe automatic retries
-- Zero runtime dependencies – only `fetch`, `ReadableStream` and Web Crypto; runs on Node.js 20+,
-  Deno, Bun and edge runtimes
+The official TypeScript / JavaScript SDK for [WBX Sandbox](https://sandbox.wbx.cz) – give your
+AI agent a computer of its own. Every sandbox is an isolated Linux microVM (Firecracker) with its
+own kernel, disk, processes and network rules, running on servers in the EU. Your agent runs
+code, installs packages, serves web apps and works with files there – never on your machine.
+
+**Zero runtime dependencies** – only `fetch`, `ReadableStream` and Web Crypto. Runs on Node.js
+20+, Deno, Bun and edge runtimes.
+
+```ts
+import { WBX } from "wbxsandbox";
+
+const wbx = new WBX();                                   // API key from WBXSANDBOX_API_KEY
+const sandbox = await wbx.sandboxes.create({ template: "base" });
+const r = await sandbox.commands.run("python3 -c 'print(6 * 7)'");
+console.log(r.exitCode, r.stdout);                       // 0 "42\n"
+await sandbox.kill();
+```
+
+## What it covers
+
+| Area | | Docs |
+|---|---|---|
+| **Sandboxes** | Create, attach later, list, extend, pause / resume, destroy; templates, environment, labels, compute class | [Create and manage](https://sandbox.wbx.cz/docs/sandboxes) |
+| **Commands and code** | Run and wait, live output callbacks, async-iterator streams, `runCode()` for Python, Node.js and bash | [Commands](https://sandbox.wbx.cz/docs/sandboxes/commands) |
+| **Files and processes** | Read, write, stream, list, move, watch for changes; background processes with stdin, signals and terminals | [Files](https://sandbox.wbx.cz/docs/sandboxes/files) |
+| **Sleep and wake** | Named sandboxes that fall asleep with their files – no compute billed – and wake on the next request | [Sleep and wake](https://sandbox.wbx.cz/docs/sandboxes/sleep) |
+| **Network and public URLs** | No network, allowlists, a public IPv6 address per sandbox; an HTTPS address with a token for any port | [Network](https://sandbox.wbx.cz/docs/sandboxes/network) · [URLs](https://sandbox.wbx.cz/docs/sandboxes/urls) |
+| **Background jobs** | Fire and forget, server-side waiting, log digests for LLMs, SHA-256-checked result files, signed execution receipts, WebAssembly jobs | [Jobs](https://sandbox.wbx.cz/docs/jobs) |
+| **Batches** | Many jobs in one call with a concurrency and total price limit, dependencies and files passed between jobs | [Batches](https://sandbox.wbx.cz/docs/jobs/batches) |
+| **Metrics** | CPU, memory, network and disk measured by the host every 10 s – history and a live stream | [Metrics](https://sandbox.wbx.cz/docs/sandboxes/metrics) |
+| **Desktop & Computer Use** (beta) | Screenshots, mouse and keyboard on a Linux desktop; enabled per team on request | [Desktop](https://sandbox.wbx.cz/docs/sandboxes/desktop) |
+| **Account** | Templates, enabled features, budgets, compute classes, webhook secret and verification | [Budgets](https://sandbox.wbx.cz/docs/jobs/budget) · [Webhooks](https://sandbox.wbx.cz/docs/jobs/webhooks) |
+
+Built for production code: typed errors with `status`, `code` and `retryAfter`, timeouts and
+`AbortSignal` on every call, automatic retries only for requests that cannot take effect twice,
+and an API key that never shows up in logs.
 
 > **Status:** 0.x – see [Versioning and compatibility](#versioning-and-compatibility).
+> Pricing: https://sandbox.wbx.cz/pricing
 
 ## Contents
 
