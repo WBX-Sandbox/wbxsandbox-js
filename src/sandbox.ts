@@ -46,6 +46,12 @@ import { base64ToBytes, bytesToBase64, compact, randomId, sleep, toUnixMs, utf8 
 const CREATE_TIMEOUT_MS = 150_000; // the gateway may take up to ~100 s to place and start a sandbox
 const FILE_TIMEOUT_MS = 300_000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
+/**
+ * HTTP limit of desktop actions: one request may type up to 8192 characters (~65 s), wait up
+ * to 30 s in total and queue behind up to two other action requests of the same sandbox.
+ * Same as the Python SDK (300 s).
+ */
+const COMPUTER_ACTIONS_TIMEOUT_MS = 300_000;
 const EXEC_GRACE_MS = 30_000;
 
 /** Options of {@link Sandboxes.create}. */
@@ -781,6 +787,10 @@ export class Computer {
    * The server stops at the first action that fails (the ones before it were performed) and
    * reports it with HTTP 200 and `ok: false`: this throws {@link ComputerActionError} with
    * `failedIndex` and `results`, unless `throwOnFailure: false` is passed.
+   *
+   * The HTTP limit defaults to 5 minutes (not the client's `timeoutMs`): typing long text,
+   * waits and queued requests can take more than a minute. Pass `timeoutMs` to change it.
+   * The same holds for the shortcuts (`click`, `type`, `key`, `scroll`, …).
    */
   async actions(actions: ComputerAction[], options: ActionOptions = {}): Promise<ComputerActionsResult> {
     const { screenshot, screenshotFormat, screenshotQuality, screenshotMaxWidth, throwOnFailure = true, ...rest } = options;
@@ -796,6 +806,7 @@ export class Computer {
       method: "POST",
       path: this.p("/actions"),
       json: { actions, screenshot: !!screenshot, ...shotOpts },
+      defaultTimeoutMs: COMPUTER_ACTIONS_TIMEOUT_MS,
       options: rest,
     });
     const ok = data.ok === true;
@@ -860,7 +871,12 @@ export class Computer {
     return this.actions([{ type: "drag", x, y, to_x: toX, to_y: toY, ...compact({ button }) }], rest);
   }
 
-  /** Scrolls at a point (`dy > 0` scrolls down, `dx > 0` right). */
+  /**
+   * Scrolls at a point: `dx` wheel steps to the right (negative = left), then `dy` down
+   * (negative = up). Note the order `(x, y, dx, dy)` – the Python SDK's `scroll(x, y, dy, dx)`
+   * takes dy first, so code ported between the SDKs should pass `0` explicitly, e.g.
+   * `scroll(640, 400, 0, 5)` scrolls 5 steps down.
+   */
   scroll(x: number, y: number, dx: number, dy: number, options?: ActionOptions) {
     return this.actions([{ type: "scroll", x, y, dx, dy }], options);
   }

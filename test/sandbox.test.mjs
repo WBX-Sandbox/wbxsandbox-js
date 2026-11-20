@@ -9,7 +9,9 @@ import {
   FeatureDisabledError,
   HumanInControlError,
   NotFoundError,
+  Sandbox,
   StreamLimitError,
+  TimeoutError,
   WBX,
 } from "../dist/index.js";
 import { SB, delay, mockServer, sendJSON } from "./helpers.mjs";
@@ -618,6 +620,28 @@ test("metrics.stream: connections that end right after opening back off and give
     })().catch((e) => e);
     assert.ok(err3 instanceof StreamLimitError);
     assert.equal(s.calls.length - before3, 1);
+  } finally {
+    await s.close();
+  }
+});
+
+test("computer.actions: HTTP limit is 5 min by default (not the client's timeoutMs); timeoutMs of the call overrides it", async () => {
+  const s = await mockServer(async (req, res, c) => {
+    await delay(200);
+    if (c.path.endsWith("/status")) return sendJSON(res, 200, { available: true });
+    sendJSON(res, 200, { ok: true, results: c.json.actions.map((a) => ({ type: a.type, ok: true })) });
+  });
+  try {
+    const sb = new Sandbox(client(s, { timeoutMs: 50, maxRetries: 0 }).transport, SB);
+    // other calls follow the client's 50 ms …
+    await assert.rejects(sb.computer.status(), TimeoutError);
+    // … actions and the shortcuts do not
+    assert.equal((await sb.computer.actions([{ type: "wait", ms: 100 }])).ok, true);
+    assert.equal((await sb.computer.type("x".repeat(8192))).ok, true);
+    assert.equal((await sb.computer.scroll(1, 2, 0, 3)).ok, true);
+    assert.deepEqual(s.calls.at(-1).json.actions, [{ type: "scroll", x: 1, y: 2, dx: 0, dy: 3 }], "order is (x, y, dx, dy)");
+    // an explicit timeoutMs still wins
+    await assert.rejects(sb.computer.click(1, 1, { timeoutMs: 50 }), TimeoutError);
   } finally {
     await s.close();
   }

@@ -1,6 +1,6 @@
 {
   "name": "wbxsandbox",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official TypeScript SDK for WBX Sandbox – isolated cloud sandboxes (Firecracker microVMs) for AI agents: commands, files, background jobs, batches, metrics and desktop control",
   "license": "MIT",
   "author": "WBX Sandbox",

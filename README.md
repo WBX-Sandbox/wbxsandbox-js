@@ -63,7 +63,7 @@ dependencies, a metrics stream, desktop control and a framework-agnostic tool fo
 
 ## Authentication and configuration
 
-Create an API key in the portal (**Settings → API keys**). The SDK sends it in the `X-API-Key`
+Create an API key in the portal (**API keys**). The SDK sends it in the `X-API-Key`
 header – never in a URL.
 
 ```ts
@@ -275,7 +275,8 @@ for await (const s of sandbox.metrics.stream({
 - The server ends a stream after 15 minutes (`end` reason `timeout`), or when the sandbox stops
   (`not_running`, `ended`). With `reconnect: true` the iterator resumes only after `timeout` or a
   dropped connection, asks for the missed samples (`since`) and skips samples it already
-  yielded. Pass `since` to start with older samples; `onEnd` receives the reason.
+  yielded. Pass `since` to start with older samples (`since: 0` = the whole stored hour); `onEnd`
+  receives the reason.
 - Reconnects wait with backoff and jitter. A connection that ends or breaks within 30 s of
   opening counts as a failure: after `maxReconnects` (default 5) such failures in a row the
   iterator throws. At most `maxConnectsPerMinute` (default 6) connections are opened in any
@@ -297,7 +298,7 @@ const shot = await sandbox.computer.screenshot({ format: "png", maxWidth: 1280 }
 await sandbox.computer.click(640, 400);
 await sandbox.computer.type("hello");
 await sandbox.computer.key("ctrl+c");
-await sandbox.computer.scroll(640, 400, 0, 5);
+await sandbox.computer.scroll(640, 400, 0, 5); // (x, y, dx, dy) – 5 steps down; Python: scroll(640, 400, dy=5)
 const r = await sandbox.computer.actions(
   [
     { type: "move", x: 10, y: 10 },
@@ -309,7 +310,7 @@ const r = await sandbox.computer.actions(
   { screenshot: true, screenshotFormat: "jpeg", screenshotQuality: 70, screenshotMaxWidth: 1024 },
 ); // r.screenshot.data – the screen after the actions; r.screenshotError if it could not be taken
 
-await sandbox.computer.control("agent"); // take control back after a person released it
+await sandbox.computer.control("agent"); // status; throws HumanInControlError while a person is in control
 ```
 
 - The server performs the actions in order and stops at the first one that fails (the ones
@@ -322,7 +323,14 @@ await sandbox.computer.control("agent"); // take control back after a person rel
 - While a person controls the desktop, actions fail with `HumanInControlError` (HTTP 409);
   `controllerUntil` (and `controller_until` of the status) is Unix time in milliseconds.
   `control("human")` is reserved for a person in the portal (403 `human_only` with an API key).
+  The portal also has a live console of the desktop for people; agents always work with
+  screenshots and actions.
 - Desktop actions are never retried automatically.
+- `scroll(x, y, dx, dy)` takes **dx before dy**. The Python SDK's `scroll(x, y, dy=0, dx=0)` has
+  them the other way round (kept for compatibility) – there, pass them by name.
+- `actions()` and its shortcuts use an HTTP limit of 5 minutes (not the client's `timeoutMs`):
+  one request may type up to 8192 characters (about a minute), wait up to 30 s and queue behind
+  other action requests of the same sandbox. `timeoutMs` of the call overrides it.
 
 ## Account
 
@@ -348,7 +356,9 @@ with the same authentication, timeouts, retries and errors.
 
 Every error extends `WBXError`. HTTP errors extend `APIError` with `status`, `code` (the
 machine-readable `code` of the `{"error": …, "code": …}` body, when sent), `body`, `headers` and
-`retryAfter` (seconds, from `Retry-After`).
+`retryAfter` (seconds, from `Retry-After`). The Python SDK's `SandboxError` carries the same
+fields as `status`, `code`, `body` and `retry_after`, and its `ComputerActionError` the same
+`failed_index` and `results`.
 
 | Class | When |
 | --- | --- |
@@ -361,7 +371,7 @@ machine-readable `code` of the `{"error": …, "code": …}` body, when sent), `
 | `ConflictError` | 409 – wrong state (e.g. sandbox not running, file exists) |
 | `HumanInControlError` | 409 `human_in_control` – a person controls the desktop |
 | `RateLimitError` | 429 – `quota`, `queue_full`, `too_many_waiters`, `rate_limited` |
-| `InternalServerError` | 5xx – including 503 when no capacity is free right now |
+| `InternalServerError` | 5xx – including 503 when no capacity is free right now, or new jobs are not accepted for a while (`service_unavailable`) |
 | `TimeoutError` | a request or a wait ran out of time |
 | `ConnectionError` | the API could not be reached |
 | `CommandFailedError` | `result.check()` on a failed command |
@@ -385,7 +395,7 @@ try {
 Every method takes an options object with `signal` (an `AbortSignal`) and `timeoutMs` (one HTTP
 attempt; `0` = no limit). Aborting rejects with the signal's reason (an `AbortError` by default)
 and stops retries and waits at once. Defaults: 60 s per request; sandbox creation 150 s; files
-5 min; artifacts 10 min. A command's HTTP limit follows its own `timeoutMs` (+ 30 s).
+5 min; desktop actions 5 min; artifacts 10 min. A command's HTTP limit follows its own `timeoutMs` (+ 30 s).
 For streams the limit applies until the response starts; afterwards use the signal.
 
 ```ts

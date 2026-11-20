@@ -4,7 +4,24 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
-## [0.1.1] – 2026-11-21
+## [0.1.2] – 2026-11-20
+
+### Fixed
+
+- `sandbox.computer.actions()` and its shortcuts (`click`, `type`, `key`, `scroll`, …) use an
+  HTTP limit of 5 minutes instead of the client's 60 s, as the Python SDK does: one request may
+  type up to 8192 characters (about a minute), wait up to 30 s and queue behind other action
+  requests. `timeoutMs` of the call still overrides it.
+
+### Documentation
+
+- `scroll(x, y, dx, dy)`: the order differs from the Python SDK (`scroll(x, y, dy, dx)`);
+  documented in the method and the README.
+- README: API keys are created on the portal's **API keys** page; `metrics.stream({ since: 0 })`
+  starts with the whole stored hour; `computer.control("agent")` cannot take control away from
+  a person (`HumanInControlError`); 503 `service_unavailable` when new jobs are not accepted.
+
+## [0.1.1] – 2026-11-20
 
 ### Changed
 
