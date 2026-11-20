@@ -4,7 +4,15 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
-## [0.1.0] – unreleased
+## [0.1.1] – 2026-11-21
+
+### Changed
+
+- Releases are published through npm trusted publishing (GitHub Actions OIDC) as staged
+  versions approved by a maintainer with 2FA; packages carry provenance.
+- CI runs on Node.js 20, 22 and 24 (GitHub Actions v5).
+
+## [0.1.0] – 2026-11-20
 
 First release.
 
