@@ -4,7 +4,7 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
-## [0.2.1] – unreleased
+## [0.2.1] – 2026-11-21
 
 ### Changed
 
@@ -19,7 +19,7 @@ All notable changes to this package are documented here. The format follows
 
 - README: section on snapshots and clones (examples, what copies inherit, limits, errors).
 
-## [0.2.0] – unreleased
+## [0.2.0] – 2026-11-21
 
 ### Added
 
