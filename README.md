@@ -28,6 +28,7 @@ await sandbox.kill();
 | **Commands and code** | Run and wait, live output callbacks, async-iterator streams, `runCode()` for Python, Node.js and bash | [Commands](https://sandbox.wbx.cz/docs/sandboxes/commands) |
 | **Files and processes** | Read, write, stream, list, move, watch for changes; background processes with stdin, signals and terminals | [Files](https://sandbox.wbx.cz/docs/sandboxes/files) |
 | **Sleep and wake** | Named sandboxes that fall asleep with their files – no compute billed – and wake on the next request | [Sleep and wake](https://sandbox.wbx.cz/docs/sandboxes/sleep) |
+| **Snapshots and clones** | Save a sandbox disk, start new sandboxes from it, or make up to 10 copies of a sandbox in one call; copies keep the source's lifetime and network settings | [Snapshots & clones](https://sandbox.wbx.cz/docs/sandboxes/snapshots) |
 | **Network and public URLs** | No network, allowlists, a public IPv6 address per sandbox; an HTTPS address with a token for any port | [Network](https://sandbox.wbx.cz/docs/sandboxes/network) · [URLs](https://sandbox.wbx.cz/docs/sandboxes/urls) |
 | **Background jobs** | Fire and forget, server-side waiting, log digests for LLMs, SHA-256-checked result files, signed execution receipts, WebAssembly jobs | [Jobs](https://sandbox.wbx.cz/docs/jobs) |
 | **Batches** | Many jobs in one call with a concurrency and total price limit, dependencies and files passed between jobs | [Batches](https://sandbox.wbx.cz/docs/jobs/batches) |
@@ -48,6 +49,7 @@ and an API key that never shows up in logs.
 - [Quick start](#quick-start)
 - [Authentication and configuration](#authentication-and-configuration)
 - [Sandboxes](#sandboxes)
+- [Snapshots and clones](#snapshots-and-clones)
 - [Commands and code](#commands-and-code)
 - [Files](#files)
 - [Background processes](#background-processes)
@@ -153,6 +155,83 @@ const all = await wbx.sandboxes.list();
 Records returned by the API keep the API's own field names (`created_at`, `exit_code`, …), so
 the [REST documentation](https://sandbox.wbx.cz/docs/api) applies to them unchanged. Options
 you pass to the SDK are camelCase.
+
+## Snapshots and clones
+
+A **snapshot** is a copy of a sandbox disk: installed packages, your files and everything else
+written to the disk (also `.env` files or shell history) – no memory, no running programs and no
+environment variables passed with `env`. It belongs to your account only, stays until you
+delete it (also after the source sandbox ends) and its size is billed as storage, like a
+sleeping sandbox. A **clone** is a snapshot plus 1–10 new sandboxes started from it in one call.
+
+Snapshots and clones are available on every plan (features `snapshots` and `clones`, shown by
+`wbx.features()`). If they have been turned off for your account, the calls throw
+`FeatureDisabledError` (403 `feature_disabled`).
+
+```ts
+const sandbox = await wbx.sandboxes.create({ template: "base", timeoutSeconds: 1800, onTimeout: "pause" });
+await sandbox.commands.run("pip install pandas");
+
+// snapshot of a running, paused or sleeping sandbox (a running one keeps running)
+const snap = await sandbox.snapshot({ name: "after-setup" });
+snap.id;          // "snap_…"
+snap.sizeBytes;   // space it takes (billed as storage)
+
+// a new sandbox from the snapshot: settings come from this call, not from the snapshot
+const sb2 = await wbx.sandboxes.create({ fromSnapshot: snap.id, timeoutSeconds: 600, env: { TOKEN: "…" } });
+// or: await snap.createSandbox({ timeoutSeconds: 600 })
+
+for (const s of await wbx.snapshots.list()) console.log(s.id, s.name, s.sourceSandbox, s.sizeBytes);
+await wbx.snapshots.delete("snap_…"); // or snap.delete()
+```
+
+Clone – the copies keep the source's lifetime and network settings unless you pass them:
+
+```ts
+const { sandboxes, errors } = await sandbox.clone({ count: 3 });       // 30 minutes, sleep after it – as the source
+// errors: [{ index, name, status, code, error }] – copies that could not be created
+await sandbox.clone({ timeoutSeconds: 3600, name: "long-run" });       // own lifetime, the rest as the source
+await sandbox.clone({ count: 2, network: { mode: "none" } });          // network can only be narrowed
+const { snapshotId, snapshotKept } = await sandbox.clone({ count: 2, keepSnapshot: true, snapshotName: "base-env" });
+```
+
+What a copy takes from the source sandbox when the option is left out:
+
+| Option | Without it |
+|---|---|
+| `timeoutSeconds` | the source's lifetime (as created, or as last set with `setTimeout()`) |
+| `onTimeout`, `idleTimeoutSeconds` | the source's (sleep or destroy after the lifetime; inactivity limit with `"pause"`) |
+| `keepDays` | the source's, at most what your plan allows |
+| `computeClass` | the source's class (your account's default class if you can no longer use the source's) |
+| `network` | the source's network access and IP version. A passed `network` can only narrow it: the stricter mode wins, blocked destinations add up, two allowlists give only destinations allowed by both; `ip: "ipv4"` gives copies of an IPv6 source no IPv6 |
+| `env`, `metadata` | not taken over – pass what the copies need |
+
+A zero or empty value counts as left out: `timeoutSeconds: 0`, `keepDays: 0`, `idleTimeoutSeconds: 0`
+and `computeClass: ""` keep the source's setting – pass the value you want instead.
+
+`name` names the copies (`<name>-1` … `<name>-N` for several). A sandbox started with
+`fromSnapshot` takes nothing from the source sandbox – only the files of the snapshot.
+
+Every copy and every sandbox from a snapshot gets a new ID, its own IP addresses and a new
+identity (new machine-id, no SSH host keys of the source); it restarts once during its first
+start, so starting it takes a few seconds longer. Copies start on the server that holds the
+snapshot and count towards your concurrent-sandbox, vCPU and memory limits.
+
+Limits and errors:
+
+- Number of snapshots: set by your plan (by default Free 3, Solo 10, Pro 50, Team 200) –
+  `RateLimitError`, code `snapshot_limit`. A clone deletes its snapshot afterwards unless
+  `keepSnapshot` is set.
+- An archived sandbox must be woken up first – `ConflictError`, code `sandbox_archived`.
+- `clone()` returns the copies that were created and lists the others in `errors`; it throws
+  only when no copy could be created (the error of the first copy).
+- 503 `snapshot_node_unavailable`: the server with the snapshot is full or not responding;
+  503 `clone_network_unknown`: the network settings of the source cannot be read right now –
+  retry shortly (`InternalServerError`).
+- Default time limits: 630 s for a snapshot, 300 s for a sandbox from a snapshot, 930 s for a
+  clone (other creates 150 s).
+
+Details: https://sandbox.wbx.cz/docs/sandboxes/snapshots
 
 ## Commands and code
 
@@ -365,7 +444,7 @@ await sandbox.computer.control("agent"); // status; throws HumanInControlError w
 
 ```ts
 await wbx.templates.list();
-await wbx.features();                  // { metrics_history: boolean, desktop: boolean }
+await wbx.features();                  // { metrics_history: boolean, desktop: boolean, snapshots: boolean, clones: boolean }
 await wbx.budget.get({ days: true });  // limits, spend this month / today, per day
 await wbx.budget.update({ monthly: "50", alertPct: 80 });
 await wbx.compute.preferences();       // compute classes available to you, your default
@@ -397,9 +476,9 @@ fields as `status`, `code`, `body` and `retry_after`, and its `ComputerActionErr
 | `PermissionDeniedError` | 403 – the key may not do this |
 | `FeatureDisabledError` | 403 `feature_disabled` – `.feature` names it |
 | `NotFoundError` | 404 – sandbox, job, batch, file or process not found |
-| `ConflictError` | 409 – wrong state (e.g. sandbox not running, file exists) |
+| `ConflictError` | 409 – wrong state (e.g. sandbox not running, file exists, `sandbox_archived` for a snapshot) |
 | `HumanInControlError` | 409 `human_in_control` – a person controls the desktop |
-| `RateLimitError` | 429 – `quota`, `queue_full`, `too_many_waiters`, `rate_limited` |
+| `RateLimitError` | 429 – `quota`, `snapshot_limit`, `queue_full`, `too_many_waiters`, `rate_limited` |
 | `InternalServerError` | 5xx – including 503 when no capacity is free right now, or new jobs are not accepted for a while (`service_unavailable`) |
 | `TimeoutError` | a request or a wait ran out of time |
 | `ConnectionError` | the API could not be reached |

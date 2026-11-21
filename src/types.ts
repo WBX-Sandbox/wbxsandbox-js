@@ -68,6 +68,45 @@ export interface SandboxInfo {
   delete_reason?: string;
 }
 
+/** A snapshot of a sandbox disk (`GET /v1/snapshots/{id}`). Files only – never env or memory. */
+export interface SnapshotInfo {
+  /** Snapshot ID (`snap_…`). */
+  id: string;
+  name?: string;
+  /** ID of the sandbox the snapshot was taken from (it may no longer exist). */
+  source_sandbox?: string;
+  template: string;
+  vcpu?: number;
+  mem_mb?: number;
+  /** Size of the disk in MB (the size a sandbox from this snapshot gets). */
+  disk_mb?: number;
+  /** Space the snapshot takes – billed as storage. */
+  size_bytes?: number;
+  created_at?: string;
+}
+
+/** One copy of a clone that could not be created. */
+export interface CloneError {
+  /** Position of the copy, 0 … count-1. */
+  index?: number;
+  /** Name of the copy (`<name>-N` for several copies), empty without `name`. */
+  name?: string;
+  error?: string;
+  code?: string;
+  /** HTTP status of the failed create, when the server sent it. */
+  status?: number;
+  [key: string]: unknown;
+}
+
+/** Response of `POST /v1/sandboxes/{id}/clone`. */
+export interface CloneResponse {
+  snapshot_id?: string;
+  /** Whether the snapshot was kept (`keep_snapshot`). */
+  snapshot_kept?: boolean;
+  sandboxes?: SandboxInfo[];
+  errors?: CloneError[];
+}
+
 /** Result of `PUT /v1/sandboxes/{id}/keep`. */
 export interface KeepResult {
   id: string;

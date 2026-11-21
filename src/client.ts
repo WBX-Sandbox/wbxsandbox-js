@@ -7,6 +7,7 @@ import { BudgetResource, Compute, Templates, Webhooks } from "./account.js";
 import { INSPECT, Transport, type Query, type RequestOptions } from "./http.js";
 import { Batches, Jobs } from "./jobs.js";
 import { Sandboxes } from "./sandbox.js";
+import { Snapshots } from "./snapshots.js";
 import type { Features, ReceiptKey, Runtimes } from "./types.js";
 import { readEnv } from "./util.js";
 
@@ -52,6 +53,8 @@ export interface ClientOptions {
 export class WBX {
   /** Sandboxes: create, get, list, kill. */
   readonly sandboxes: Sandboxes;
+  /** Snapshots of sandbox disks (feature `snapshots`): list, get, delete. */
+  readonly snapshots: Snapshots;
   /** Background jobs. */
   readonly jobs: Jobs;
   /** Batches of jobs. */
@@ -83,6 +86,7 @@ export class WBX {
       maxStreamEventSize: options.maxStreamEventSize,
     });
     this.sandboxes = new Sandboxes(this.transport);
+    this.snapshots = new Snapshots(this.transport);
     this.jobs = new Jobs(this.transport);
     this.batches = new Batches(this.transport);
     this.templates = new Templates(this.transport);

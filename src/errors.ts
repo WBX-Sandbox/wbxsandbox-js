@@ -113,7 +113,10 @@ export class NotFoundError extends APIError {
   override name = "NotFoundError";
 }
 
-/** 409 – the resource is in a state that does not allow the operation. */
+/**
+ * 409 – the resource is in a state that does not allow the operation (for example code
+ * `sandbox_archived`: wake an archived sandbox up before taking a snapshot).
+ */
 export class ConflictError extends APIError {
   override name = "ConflictError";
 }
@@ -137,8 +140,9 @@ export class HumanInControlError extends ConflictError {
 
 /**
  * 429 – a limit was reached. `code` tells which one: `quota` (concurrent sandboxes, vCPU or
- * memory of the account), `queue_full` (queued jobs) or `too_many_waiters`. When the server
- * sent `Retry-After`, {@link APIError.retryAfter} holds the number of seconds.
+ * memory of the account), `snapshot_limit` (snapshots of your plan), `queue_full` (queued jobs)
+ * or `too_many_waiters`. When the server sent `Retry-After`, {@link APIError.retryAfter} holds
+ * the number of seconds.
  */
 export class RateLimitError extends APIError {
   override name = "RateLimitError";

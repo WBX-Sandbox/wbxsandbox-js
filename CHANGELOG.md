@@ -4,6 +4,37 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
+## [0.2.1] – unreleased
+
+### Changed
+
+- `sandbox.clone()` sends only the options you pass (as before); the platform (0.16.1) now gives
+  copies the source sandbox's lifetime (`timeoutSeconds`, `onTimeout`, `idleTimeoutSeconds`,
+  `keepDays`), compute class and network access when they are left out. A `network` passed to
+  `clone()` can only narrow the source's access. Doc comments updated.
+- Snapshots and clones are available to every account (no longer enabled on request); they can
+  still be turned off for an account, then the API answers `403 feature_disabled`.
+
+### Documentation
+
+- README: section on snapshots and clones (examples, what copies inherit, limits, errors).
+
+## [0.2.0] – unreleased
+
+### Added
+
+- Snapshots of a sandbox disk (feature `snapshots`): `sandbox.snapshot({ name })` returns a
+  `Snapshot` (`id`, `name`, `sourceSandbox`, `template`, `sizeBytes`, `createdAt`, `info`);
+  `wbx.snapshots.list()`, `.get(id)`, `.delete(id)`, `snapshot.delete()` and
+  `snapshot.createSandbox(params)`.
+- `wbx.sandboxes.create({ fromSnapshot: "snap_…" })` starts a sandbox from a snapshot; the
+  request waits up to 300 s by default (the disk is copied), other creates 150 s.
+- Clones (features `snapshots` and `clones`): `sandbox.clone({ count, keepSnapshot, snapshotName, …create options })`
+  creates 1–10 copies and returns `{ snapshotId, snapshotKept, sandboxes, errors }` (each
+  `CloneError` has `index`, `name`, `status`, `code`, `error`); it throws only when no copy
+  was created. Types `SnapshotInfo`, `CloneParams`, `CloneResult`, `CloneError`, `CloneResponse`.
+- Error codes `snapshot_limit` (`RateLimitError`) and `sandbox_archived` (`ConflictError`) documented.
+
 ## [0.1.3] – 2026-11-20
 
 ### Documentation

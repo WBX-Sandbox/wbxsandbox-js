@@ -10,12 +10,16 @@ import {
   NotFoundError,
   StreamLimitError,
   WBXError,
+  errorFromResponse,
   isAbortLike,
 } from "./errors.js";
 import type { RequestOptions, Transport } from "./http.js";
 import { backoffMs } from "./http.js";
 import { SSEParser, readNDJSON, readSSE } from "./streams.js";
+import { Snapshot } from "./snapshots.js";
 import type {
+  CloneError,
+  CloneResponse,
   ComputerAction,
   ComputerActionResultEntry,
   ComputerActionsResult,
@@ -37,6 +41,7 @@ import type {
   SandboxMetrics,
   SandboxState,
   Screenshot,
+  SnapshotInfo,
   Signal,
   WatchEvent,
   WriteResult,
@@ -53,6 +58,12 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
  */
 const COMPUTER_ACTIONS_TIMEOUT_MS = 300_000;
 const EXEC_GRACE_MS = 30_000;
+/** A snapshot without a reflink-capable disk copies the whole disk – allow up to 10 minutes. */
+const SNAPSHOT_TIMEOUT_MS = 630_000;
+/** A sandbox from a snapshot copies the snapshot's disk and restarts once with a new identity – allow 5 minutes. */
+const FROM_SNAPSHOT_TIMEOUT_MS = 300_000;
+// klon: snapshot (server ≤ ~620 s) + souběžné kopie (≤ ~230 s) + úklid ≈ 910 s
+const CLONE_TIMEOUT_MS = 930_000;
 
 /** Options of {@link Sandboxes.create}. */
 export interface SandboxCreateParams {
@@ -89,6 +100,57 @@ export interface SandboxCreateParams {
   dependencyCache?: boolean;
   /** Network policy (only stricter than your team's policy) and IP version. */
   network?: NetworkOptions;
+  /**
+   * Start from the disk of one of your snapshots (`snap_…`, feature `snapshots`) instead of a
+   * fresh template disk. The sandbox gets the snapshot's template (leave `template` out), a new
+   * ID and network; env and settings come from these params, never from the snapshot.
+   */
+  fromSnapshot?: string;
+}
+
+/**
+ * Options of {@link Sandbox.clone}: the create options (without template) plus the count. Lifetime
+ * options, `computeClass` and `network` left out are taken from the source sandbox.
+ */
+export interface CloneParams extends Omit<SandboxCreateParams, "template" | "fromSnapshot"> {
+  /** How many copies, 1–10 (default 1). */
+  count?: number;
+  /** Keep the snapshot the copies were started from (default: it is deleted afterwards). */
+  keepSnapshot?: boolean;
+  /** Name of the snapshot (same rules as a sandbox name); useful with `keepSnapshot`. */
+  snapshotName?: string;
+}
+
+/** Result of {@link Sandbox.clone}. */
+export interface CloneResult {
+  /** The snapshot the copies were started from (deleted again unless `keepSnapshot`). */
+  snapshotId: string | undefined;
+  /** Whether the snapshot was kept (`keepSnapshot`); otherwise it has been deleted. */
+  snapshotKept: boolean;
+  /** The new sandboxes. */
+  sandboxes: Sandbox[];
+  /** One entry per copy that could not be created (`index` 0…count-1, `name`, `status`, `code`, `error`). */
+  errors: CloneError[];
+}
+
+/** @internal REST body of a create (also of a clone) from camelCase params. */
+function createBody(params: Omit<SandboxCreateParams, "template" | "fromSnapshot">): Record<string, unknown> {
+  return compact({
+    timeout_s: params.timeoutSeconds,
+    name: params.name,
+    on_timeout: params.onTimeout,
+    idle_timeout_s: params.idleTimeoutSeconds,
+    keep_days: params.keepDays,
+    metadata: params.metadata,
+    env: params.env,
+    vcpu: params.vcpu,
+    mem_mb: params.memMb,
+    compute_class: params.computeClass,
+    optimize_for: params.optimizeFor,
+    placement: params.placement,
+    dependency_cache: params.dependencyCache,
+    network: params.network,
+  });
 }
 
 /** Options of {@link Commands.run} and {@link Commands.stream}. */
@@ -1033,6 +1095,63 @@ export class Sandbox {
   }
 
   /**
+   * Saves a copy of the sandbox disk as a snapshot (feature `snapshots`). Works for a running,
+   * paused or sleeping sandbox; a running one is paused only for a moment and keeps running.
+   * The snapshot holds files only – no memory, no running programs, no env. An archived
+   * sandbox must be woken up first (`ConflictError`, code `sandbox_archived`); the number of
+   * snapshots is limited by your plan (`RateLimitError`, code `snapshot_limit`).
+   *
+   * ```ts
+   * const snap = await sandbox.snapshot({ name: "after-setup" });
+   * const copy = await snap.createSandbox({ timeoutSeconds: 600 });
+   * ```
+   */
+  async snapshot(params: { name?: string } = {}, options?: RequestOptions): Promise<Snapshot> {
+    const { data } = await this.t.json<SnapshotInfo>({
+      method: "POST",
+      path: this.path("/snapshots"),
+      json: compact({ name: params.name }),
+      defaultTimeoutMs: SNAPSHOT_TIMEOUT_MS,
+      options,
+    });
+    return new Snapshot(this.t, data);
+  }
+
+  /**
+   * Creates `count` (1–10) new sandboxes with a copy of this sandbox's disk (features
+   * `snapshots` and `clones`): a snapshot plus N creates on the same server. Each copy has its
+   * own ID, IP addresses and identity (new machine-id, no SSH host keys of the source). Memory and
+   * running programs are not copied.
+   *
+   * Copies keep the source sandbox's lifetime and network settings unless you pass them: without
+   * `timeoutSeconds`, `onTimeout`, `idleTimeoutSeconds`, `keepDays` or `computeClass` they get the
+   * source's values, and its network access (no internet, allowed destinations, IP version).
+   * A `network` passed here can only narrow the source's access, never widen it. `env` is not
+   * inherited – pass what the copies need.
+   *
+   * When some copies fail, they are listed in `errors`; when none could be created, the error
+   * of the first one is thrown. The copies count towards your concurrent-sandbox limits.
+   */
+  async clone(params: CloneParams = {}, options?: RequestOptions): Promise<CloneResult> {
+    const { count = 1, keepSnapshot, snapshotName, ...create } = params;
+    if (!Number.isInteger(count) || count < 1 || count > 10) throw new WBXError("count must be an integer between 1 and 10");
+    const { data, status, headers } = await this.t.json<CloneResponse>({
+      method: "POST",
+      path: this.path("/clone"),
+      json: compact({ ...createBody(create), count, keep_snapshot: keepSnapshot || undefined, snapshot_name: snapshotName || undefined }),
+      defaultTimeoutMs: CLONE_TIMEOUT_MS,
+      options,
+    });
+    const sandboxes = (data?.sandboxes ?? []).map((d) => new Sandbox(this.t, d));
+    const errors = data?.errors ?? [];
+    const first = errors[0];
+    if (sandboxes.length === 0 && first) {
+      throw errorFromResponse(first.status ?? (status >= 400 ? status : 500), first, headers, "POST", this.path("/clone"));
+    }
+    return { snapshotId: data?.snapshot_id, snapshotKept: data?.snapshot_kept ?? !!keepSnapshot, sandboxes, errors };
+  }
+
+  /**
    * Public HTTPS address of a TCP port in the sandbox (a web app or API you started there).
    * The app must listen on `0.0.0.0`. Open `url_with_token` in a browser or send the header
    * `X-WBX-Token: <token>`.
@@ -1082,29 +1201,14 @@ export class Sandboxes {
    * without a name is never retried automatically.
    */
   async create(params: SandboxCreateParams = {}, options?: RequestOptions): Promise<Sandbox> {
-    const body = compact({
-      template: params.template,
-      timeout_s: params.timeoutSeconds,
-      name: params.name,
-      on_timeout: params.onTimeout,
-      idle_timeout_s: params.idleTimeoutSeconds,
-      keep_days: params.keepDays,
-      metadata: params.metadata,
-      env: params.env,
-      vcpu: params.vcpu,
-      mem_mb: params.memMb,
-      compute_class: params.computeClass,
-      optimize_for: params.optimizeFor,
-      placement: params.placement,
-      dependency_cache: params.dependencyCache,
-      network: params.network,
-    });
+    const body = compact({ template: params.template, ...createBody(params), from_snapshot: params.fromSnapshot });
     const { data, headers } = await this.t.json<SandboxInfo>({
       method: "POST",
       path: "/v1/sandboxes",
       json: body,
       idempotent: !!params.name,
-      defaultTimeoutMs: CREATE_TIMEOUT_MS,
+      // from a snapshot the disk is copied first – longer limit (like the portal)
+      defaultTimeoutMs: params.fromSnapshot ? FROM_SNAPSHOT_TIMEOUT_MS : CREATE_TIMEOUT_MS,
       options,
     });
     return new Sandbox(this.t, data, headers.get("x-wbx-existing") === "1");

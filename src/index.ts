@@ -26,6 +26,8 @@ export {
   Metrics,
   Computer,
   type SandboxCreateParams,
+  type CloneParams,
+  type CloneResult,
   type RunOptions,
   type RunCodeOptions,
   type FileData,
@@ -46,6 +48,7 @@ export {
   type WasmOptions,
   type WaitOptions,
 } from "./jobs.js";
+export { Snapshot, Snapshots } from "./snapshots.js";
 export { Templates, BudgetResource, Compute, Webhooks, verifyWebhook } from "./account.js";
 export { Page } from "./pagination.js";
 export { SSEParser, readNDJSON, readSSE, type SSEEvent, type SSEParserOptions, type NDJSONOptions } from "./streams.js";
