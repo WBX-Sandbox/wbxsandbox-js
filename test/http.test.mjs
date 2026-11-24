@@ -379,3 +379,27 @@ test("the API key never appears in util.inspect or JSON.stringify of the client,
   }
 });
 
+
+test("redirects are not followed – the API key never goes to another server", async () => {
+  const other = await mockServer((req, res) => sendJSON(res, 200, { features: {} }));
+  const s = await mockServer((req, res) => {
+    res.writeHead(307, { Location: other.url + "/v1/features" });
+    res.end();
+  });
+  try {
+    const wbx = new WBX({ apiKey: "wbx_secret", baseURL: s.url, maxRetries: 0 });
+    await assert.rejects(wbx.features(), (e) => e instanceof ConnectionError && /redirect/.test(e.message) && !e.message.includes("wbx_secret"));
+    assert.equal(other.calls.length, 0);
+  } finally {
+    await s.close();
+    await other.close();
+  }
+});
+
+test("plain http only for localhost or with allowInsecure", () => {
+  assert.throws(() => new WBX({ apiKey: "k", baseURL: "http://sandbox.wbx.cz" }), /unencrypted/);
+  assert.throws(() => new WBX({ apiKey: "k", baseURL: "ftp://x" }), /unencrypted/);
+  assert.equal(new WBX({ apiKey: "k", baseURL: "http://sandbox.internal", allowInsecure: true }).baseURL, "http://sandbox.internal");
+  assert.equal(new WBX({ apiKey: "k", baseURL: "http://localhost:8080/" }).baseURL, "http://localhost:8080");
+  assert.equal(new WBX({ apiKey: "k", baseURL: "http://[::1]:8080" }).baseURL, "http://[::1]:8080");
+});
