@@ -247,7 +247,8 @@ export class Transport {
       const link = linkSignal(opts.signal, timeoutMs);
       let resp: Response;
       try {
-        const init: RequestInit & { duplex?: "half" } = { method, headers, signal: link.signal };
+        // přesměrování se nesleduje: X-API-Key by fetch poslal i na jiný server (S1)
+        const init: RequestInit & { duplex?: "half" } = { method, headers, signal: link.signal, redirect: "manual" };
         if (body !== undefined) init.body = body;
         if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) init.duplex = "half";
         resp = await cfg.fetch(url, init);
@@ -262,6 +263,13 @@ export class Transport {
           continue;
         }
         throw err;
+      }
+      if (resp.type === "opaqueredirect" || (resp.status >= 300 && resp.status < 400)) {
+        link.release();
+        const to = resp.headers.get("location");
+        throw new ConnectionError(
+          `${method} ${spec.path}: the server at ${cfg.baseURL} answered with a redirect${to ? ` to ${to}` : ""} – redirects are not followed so the API key is never sent to another address; set the API address to the final one`,
+        );
       }
       if (resp.ok) {
         // the timeout covers the start of the response; reading the body is up to the caller

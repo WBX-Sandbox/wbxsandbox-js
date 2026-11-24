@@ -35,6 +35,28 @@ export interface ClientOptions {
    * characters (default 16 MiB). A longer one stops the stream with `StreamLimitError`.
    */
   maxStreamEventSize?: number;
+  /**
+   * Allow a plain `http://` API address other than localhost. Off by default: over http the
+   * API key would travel unencrypted.
+   */
+  allowInsecure?: boolean;
+}
+
+/** Address of the API: https, or http only for localhost (or with `allowInsecure`). @internal */
+export function checkBaseURL(raw: string, allowInsecure = false): string {
+  const base = raw.replace(/\/+$/, "");
+  let u: URL;
+  try {
+    u = new URL(base);
+  } catch {
+    throw new TypeError(`invalid API address "${base}"`);
+  }
+  if (u.protocol === "https:") return base;
+  const local = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname);
+  if (u.protocol === "http:" && (local || allowInsecure)) return base;
+  throw new TypeError(
+    `refusing to use "${base}": the API key would be sent unencrypted – use an https:// address (or pass allowInsecure: true for a trusted network)`,
+  );
 }
 
 /**
@@ -76,7 +98,7 @@ export class WBX {
       throw new TypeError("no fetch implementation found – use Node.js 20 or newer, or pass { fetch }");
     }
     this.transport = new Transport({
-      baseURL: (options.baseURL ?? readEnv("WBXSANDBOX_URL") ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
+      baseURL: checkBaseURL(options.baseURL ?? readEnv("WBXSANDBOX_URL") ?? DEFAULT_BASE_URL, options.allowInsecure),
       apiKey: options.apiKey ?? readEnv("WBXSANDBOX_API_KEY") ?? "",
       timeoutMs: options.timeoutMs ?? 60_000,
       maxRetries: options.maxRetries ?? 2,
