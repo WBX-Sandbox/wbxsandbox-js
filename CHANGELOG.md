@@ -4,6 +4,16 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
+## [0.2.2] – 2026-11-24
+
+### Security
+
+- Redirects are no longer followed. A redirect from a proxy or an old address would otherwise
+  carry the `X-API-Key` header to another server; it now ends with `ConnectionError` that names
+  the target, so you can set the final address.
+- Plain `http://` API addresses are refused except for `localhost`, `127.0.0.1` and `[::1]`
+  (the API key would travel unencrypted). Pass `allowInsecure: true` for a trusted network.
+
 ## [0.2.1] – 2026-11-21
 
 ### Changed
