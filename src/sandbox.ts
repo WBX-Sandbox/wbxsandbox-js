@@ -3,6 +3,7 @@
  * @module
  */
 
+import { App, Apps, type AppPublishParams } from "./apps.js";
 import {
   CommandFailedError,
   ComputerActionError,
@@ -1069,7 +1070,7 @@ export class Sandbox {
   }
 
   /**
-   * Puts the sandbox to sleep: files are kept, running programs stop, no compute is billed.
+   * Puts the sandbox to sleep: files and running programs are kept, no compute is billed.
    * Any later request (or {@link resume}) wakes it up in a few seconds.
    */
   sleep(options?: RequestOptions): Promise<this> {
@@ -1158,6 +1159,20 @@ export class Sandbox {
    */
   async getUrl(port: number, options?: RequestOptions): Promise<PortURL> {
     return (await this.t.json<PortURL>({ method: "GET", path: this.path("/url"), query: { port: Math.floor(port) }, options })).data;
+  }
+
+  /**
+   * Publishes an app running in this sandbox at a permanent public address without a token
+   * (`https://<name>.<zone>`); add your own domain with `app.addDomain()`. The sandbox is kept
+   * while published, sleeps without visitors and wakes on the next visit.
+   *
+   * ```ts
+   * const app = await sandbox.publish({ name: "dog-club", port: 8000, startCommand: "python3 app.py" });
+   * console.log(app.url); // https://dog-club.box.wbxbox.net/
+   * ```
+   */
+  async publish(params: AppPublishParams, options?: RequestOptions): Promise<App> {
+    return new Apps(this.t).publish(this.id, params, options);
   }
 
   /**

@@ -85,6 +85,45 @@ export interface SnapshotInfo {
   created_at?: string;
 }
 
+/** A DNS record to create for your own domain. */
+export interface AppDNSRecord {
+  type: "CNAME" | "A" | "AAAA" | "TXT";
+  name: string;
+  value: string;
+}
+
+/** Your own domain of a published app. */
+export interface AppDomainInfo {
+  domain: string;
+  /** `pending` (waiting for DNS), `issuing` (certificate on its way) or `active`. */
+  state: "pending" | "issuing" | "active" | string;
+  url?: string;
+  /** What is missing while the domain is not active. */
+  error?: string;
+  cert_expires_at?: string;
+  /** Set when an active domain stopped pointing to us; it turns off at `disable_at`. */
+  dns_lost_since?: string;
+  disable_at?: string;
+  /** Records to create until the domain is active: `cname` for a subdomain, `root` for a root domain. */
+  dns?: { cname: AppDNSRecord; root: AppDNSRecord[] };
+  created_at?: string;
+}
+
+/** A published app (`/v1/apps`). */
+export interface AppInfo {
+  name: string;
+  /** Public address, e.g. `https://dog-club.box.wbxbox.net/`. */
+  url?: string;
+  sandbox_id: string;
+  port: number;
+  start_command?: string;
+  cwd?: string;
+  domains?: AppDomainInfo[];
+  /** Reason when the operator turned the app off. */
+  disabled?: string;
+  created_at?: string;
+}
+
 /** One copy of a clone that could not be created. */
 export interface CloneError {
   /** Position of the copy, 0 … count-1. */
