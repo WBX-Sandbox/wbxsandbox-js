@@ -4,6 +4,22 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the package uses
 [semantic versioning](https://semver.org) (while 0.x, minor releases may break compatibility).
 
+## [0.3.0] – 2026-11-26
+
+### Added
+
+- **Published apps:** `sandbox.publish({ name, port, startCommand?, cwd? })` puts an app from the
+  sandbox at a permanent public address without a token (`https://<name>.box.wbxbox.net`);
+  `wbx.apps.publish()`, `list()`, `get(name)`, `unpublish(name)` and `app.unpublish()`.
+- **Own domains:** `app.addDomain("booking.example.com")` returns the domain with its `state` and the
+  DNS records to create (`dns.cname`, or `dns.root` for a root domain); `app.removeDomain(...)`.
+  The certificate is issued automatically. Paid plans (`FeatureDisabledError` otherwise).
+- Types `AppInfo`, `AppDomainInfo`, `AppDNSRecord`, `AppPublishParams`.
+
+### Changed
+
+- `sleep()` documentation: running programs continue after the wake-up.
+
 ## [0.2.2] – 2026-11-24
 
 ### Security

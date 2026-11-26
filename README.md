@@ -4,7 +4,7 @@
 
 The official TypeScript / JavaScript SDK for [WBX Sandbox](https://sandbox.wbx.cz) – give your
 AI agent a computer of its own. Every sandbox is an isolated Linux microVM (Firecracker) with its
-own kernel, disk, processes and network rules, running on servers in the EU. Your agent runs
+own kernel, disk, processes and network rules, running on servers in Europe. Your agent runs
 code, installs packages, serves web apps and works with files there – never on your machine.
 
 **Zero runtime dependencies** – only `fetch`, `ReadableStream` and Web Crypto. Runs on Node.js
@@ -30,10 +30,11 @@ await sandbox.kill();
 | **Sleep and wake** | Named sandboxes that fall asleep with their files – no compute billed – and wake on the next request | [Sleep and wake](https://sandbox.wbx.cz/docs/sandboxes/sleep) |
 | **Snapshots and clones** | Save a sandbox disk, start new sandboxes from it, or make up to 10 copies of a sandbox in one call; copies keep the source's lifetime and network settings | [Snapshots & clones](https://sandbox.wbx.cz/docs/sandboxes/snapshots) |
 | **Network and public URLs** | No network, allowlists, a public IPv6 address per sandbox; an HTTPS address with a token for any port | [Network](https://sandbox.wbx.cz/docs/sandboxes/network) · [URLs](https://sandbox.wbx.cz/docs/sandboxes/urls) |
+| **Published apps** | Put an app from a sandbox at a permanent public address without a token, or on your own domain with automatic HTTPS; the sandbox sleeps without visitors and wakes on the next visit (paid plans) | [Published apps](https://sandbox.wbx.cz/docs/sandboxes/apps) |
 | **Background jobs** | Fire and forget, server-side waiting, log digests for LLMs, SHA-256-checked result files, signed execution receipts, WebAssembly jobs | [Jobs](https://sandbox.wbx.cz/docs/jobs) |
 | **Batches** | Many jobs in one call with a concurrency and total price limit, dependencies and files passed between jobs | [Batches](https://sandbox.wbx.cz/docs/jobs/batches) |
 | **Metrics** | CPU, memory, network and disk measured by the host every 10 s – history and a live stream | [Metrics](https://sandbox.wbx.cz/docs/sandboxes/metrics) |
-| **Desktop & Computer Use** (beta) | Screenshots, mouse and keyboard on a Linux desktop; enabled per team on request | [Desktop](https://sandbox.wbx.cz/docs/sandboxes/desktop) |
+| **Desktop & Computer Use** | Screenshots, mouse and keyboard on a Linux desktop; on paid plans or after topping up at least US$15 | [Desktop](https://sandbox.wbx.cz/docs/sandboxes/desktop) |
 | **Account** | Templates, enabled features, budgets, compute classes, webhook secret and verification | [Budgets](https://sandbox.wbx.cz/docs/jobs/budget) · [Webhooks](https://sandbox.wbx.cz/docs/jobs/webhooks) |
 
 Built for production code: typed errors with `status`, `code` and `retryAfter`, timeouts and
@@ -50,6 +51,7 @@ and an API key that never shows up in logs.
 - [Authentication and configuration](#authentication-and-configuration)
 - [Sandboxes](#sandboxes)
 - [Snapshots and clones](#snapshots-and-clones)
+- [Published apps](#published-apps) (feature `apps`)
 - [Commands and code](#commands-and-code)
 - [Files](#files)
 - [Background processes](#background-processes)
@@ -142,7 +144,7 @@ sandbox.info;      // the API record (snake_case fields)
 await sandbox.setTimeout(3600);
 const { url_with_token } = await sandbox.getUrl(8080); // public HTTPS address of a port
 await sandbox.keep(14);       // days to keep it after it falls asleep
-await sandbox.sleep();        // files kept, programs stop, no compute billed
+await sandbox.sleep();        // files and running programs kept, no compute billed
 await sandbox.resume();       // or any other request wakes it up
 await sandbox.pause();        // freeze with memory; resume() continues where it stopped
 await sandbox.refresh();      // reload the record
@@ -232,6 +234,27 @@ Limits and errors:
   clone (other creates 150 s).
 
 Details: https://sandbox.wbx.cz/docs/sandboxes/snapshots
+
+## Published apps
+
+Put an app running in a sandbox at a permanent public address – anyone can open it without a
+token. The sandbox is kept while the app is published, sleeps without visitors and wakes on the
+next visit; when nothing listens on the port, `startCommand` runs. Paid plans
+(`FeatureDisabledError` otherwise).
+
+```ts
+const app = await sandbox.publish({ name: "dog-club", port: 8000, startCommand: "python3 app.py" });
+console.log(app.url); // https://dog-club.box.wbxbox.net/
+
+// your own domain – create the DNS record from the answer, the certificate is automatic
+const d = await app.addDomain("booking.example.com");
+console.log(d.state, d.dns?.cname); // pending { type: "CNAME", name: "booking.example.com", value: "dog-club.box.wbxbox.net" }
+
+for (const a of await wbx.apps.list()) console.log(a.name, a.url, a.domains.map((x) => `${x.domain}:${x.state}`));
+await app.unpublish(); // the sandbox stays
+```
+
+Details: https://sandbox.wbx.cz/docs/sandboxes/apps
 
 ## Commands and code
 
