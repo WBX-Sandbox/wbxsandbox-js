@@ -28,6 +28,6 @@ await sandbox.commands.run("for i in 1 2 3; do echo step $i; sleep 1; done", {
   onStdout: (data) => process.stdout.write(data),
 });
 
-// Put it to sleep: files kept, programs stop, no compute billed. Any request wakes it up.
+// Put it to sleep: files and running programs kept, no compute billed. Any request wakes it up.
 await sandbox.sleep();
 console.log("state:", sandbox.state);
